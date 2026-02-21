@@ -1,14 +1,11 @@
-# Use official Java image
-FROM eclipse-temurin:17-jdk
-
-# Set working directory
+FROM maven:3.9.6-eclipse-temurin-17 AS builder
 WORKDIR /app
+COPY pom.xml .
+COPY src ./src
+RUN mvn clean package -DskipTests
 
-# Copy everything
-COPY . .
-
-# Build the project
-RUN ./mvnw clean package -DskipTests || mvn clean package -DskipTests
-
-# Run the jar
-CMD ["java", "-jar", "target/*.jar"]
+FROM eclipse-temurin:17-jdk
+WORKDIR /app
+COPY --from=builder /app/target/*.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java","-jar","app.jar"]
