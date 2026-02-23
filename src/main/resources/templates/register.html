@@ -7,14 +7,28 @@
 <body class="bg-light">
 <div class="container p-5 mt-5 bg-white rounded shadow">
     <h2 class="text-primary text-center mb-4">User Registration</h2>
-    <form th:action="@{/register}" th:object="${user}" method="post" class="d-flex flex-column align-items-center">
+
+    <form th:action="@{/register}" th:object="${user}" method="post"
+          class="d-flex flex-column align-items-center">
+
         <input class="form-control mb-2 w-75" type="text" th:field="*{name}" placeholder="Name" required />
         <input class="form-control mb-2 w-75" type="email" th:field="*{email}" placeholder="Email" required />
         <input class="form-control mb-2 w-75" type="text" th:field="*{username}" placeholder="Username" required />
         <input class="form-control mb-3 w-75" type="password" th:field="*{password}" placeholder="Password" required />
+
         <button class="btn btn-primary w-50" type="submit">Register</button>
     </form>
+
+    <!-- Success message -->
     <p class="text-center mt-3 text-success" th:text="${message}"></p>
+
+    <!-- 🔽 LOGIN LINK ADDED HERE -->
+    <div class="text-center mt-3">
+        <a href="/login" class="btn btn-outline-secondary w-50">
+            Already have an account? Login
+        </a>
+    </div>
+
 </div>
 </body>
 </html>
