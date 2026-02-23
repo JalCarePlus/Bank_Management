@@ -1,6 +1,6 @@
 package banking_app.controller;
 
-import banking_app.model.User; // Your User class
+import banking_app.entity.User; // Your User class
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
