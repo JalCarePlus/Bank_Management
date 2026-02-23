@@ -1,0 +1,35 @@
+# Build output
+/target/
+
+# IDE files
+/.idea/
+/*.iml
+*.iws
+*.ipr
+/.settings/
+
+# VS Code
+/.vscode/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Compiled class files
+*.class
+
+# Package files
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Maven wrapper (optional, since you don’t want it)
+/mvnw
+/mvnw.cmd
+/.mvn/wrapper/
