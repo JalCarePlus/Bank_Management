@@ -6,6 +6,7 @@ import banking_app.entity.Transaction;
 import banking_app.repository.AccountRepository;
 import banking_app.repository.UserRepository;
 import banking_app.repository.TransactionRepository;
+import org.springframework.transaction.annotation.Transactional;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -32,7 +33,6 @@ public class UserController {
     @Autowired
     private BCryptPasswordEncoder passwordEncoder;
 
-
     // ================== Registration ==================
     @GetMapping("/register")
     public String showRegistrationForm(Model model) {
@@ -41,16 +41,23 @@ public class UserController {
     }
 
     @PostMapping("/register")
-    public String registerUser(User user, Model model) {
-        user.setRole("USER");  // default role
+    public String registerUser(@ModelAttribute User user, Model model) {
+        // Check if username already exists
+        if (userRepository.findByUsername(user.getUsername()) != null) {
+            model.addAttribute("error", "Username already exists!");
+            return "register";
+        }
+        
+        user.setRole("USER");
         user.setPassword(passwordEncoder.encode(user.getPassword()));
+        user.setCreatedAt(LocalDateTime.now());
+        user.setActive(true);
         userRepository.save(user);
-
 
         // Create account automatically with initial balance
         Account account = new Account();
         account.setUser(user);
-        account.setBalance(1000.0); // initial balance
+        account.setBalance(1000.0);
         account.setAccountNumber(generateAccountNumber());
         accountRepository.save(account);
 
@@ -71,19 +78,35 @@ public class UserController {
     }
 
     @PostMapping("/login")
-    public String loginUser(@ModelAttribute("user") User user, Model model, HttpSession session) {
+    public String loginUser(@ModelAttribute("user") User user, 
+                           Model model, 
+                           HttpSession session) {
+        
+        // Find user by username
         User existingUser = userRepository.findByUsername(user.getUsername());
-        if (existingUser != null &&
-        	    passwordEncoder.matches(user.getPassword(), existingUser.getPassword())) {
-            // Store logged-in user in session
+        
+        // Check if user exists and password matches
+        if (existingUser != null && 
+            passwordEncoder.matches(user.getPassword(), existingUser.getPassword())) {
+            
+            // Update last login time
+            existingUser.setLastLoginAt(LocalDateTime.now());
+            userRepository.save(existingUser);
+            
+            // Store in session
             session.setAttribute("loggedInUser", existingUser);
 
-            // Fetch user's account
-            Account account = accountRepository.findByUser(existingUser);
-            model.addAttribute("user", existingUser);
-            model.addAttribute("account", account);
-            return "dashboard";
+            // Redirect based on role
+            if ("ADMIN".equals(existingUser.getRole())) {
+                return "redirect:/admin/dashboard";
+            } else {
+                Account account = accountRepository.findByUser(existingUser);
+                model.addAttribute("user", existingUser);
+                model.addAttribute("account", account);
+                return "dashboard";
+            }
         } else {
+            // Invalid credentials
             model.addAttribute("error", "Invalid username or password");
             return "login";
         }
@@ -96,25 +119,28 @@ public class UserController {
         if (loggedInUser == null) {
             return "redirect:/login";
         }
+        
         Account account = accountRepository.findByUser(loggedInUser);
         model.addAttribute("user", loggedInUser);
         model.addAttribute("account", account);
         return "dashboard";
     }
 
- // ================== Transfer Money ==================
+    // ================== Transfer Money ==================
     @GetMapping("/transfer")
     public String showTransferPage(Model model, HttpSession session) {
         User loggedInUser = (User) session.getAttribute("loggedInUser");
         if (loggedInUser == null) {
             return "redirect:/login";
         }
+        
         Account account = accountRepository.findByUser(loggedInUser);
         model.addAttribute("user", loggedInUser);
         model.addAttribute("account", account);
         return "transfer";
     }
-
+    
+    @Transactional
     @PostMapping("/transfer")
     public String transferMoney(@RequestParam("receiverAccount") String receiverAccountNumber,
                                 @RequestParam("amount") Double amount,
@@ -149,23 +175,20 @@ public class UserController {
         accountRepository.save(senderAccount);
         accountRepository.save(receiverAccount);
 
-        // ================== Record transactions ==================
-
-        // Debit transaction for sender
+        // Record transactions
         Transaction debitTx = new Transaction();
-        debitTx.setUser(loggedInUser); // sender
+        debitTx.setUser(loggedInUser);
         debitTx.setAmount(amount);
         debitTx.setType("DEBIT");
-        debitTx.setReceiverAccount(receiverAccount.getAccountNumber()); // show other party
+        debitTx.setReceiverAccount(receiverAccount.getAccountNumber());
         debitTx.setDateTime(LocalDateTime.now());
         transactionRepository.save(debitTx);
 
-        // Credit transaction for receiver
         Transaction creditTx = new Transaction();
-        creditTx.setUser(receiverAccount.getUser()); // receiver
+        creditTx.setUser(receiverAccount.getUser());
         creditTx.setAmount(amount);
         creditTx.setType("CREDIT");
-        creditTx.setReceiverAccount(senderAccount.getAccountNumber()); // show sender
+        creditTx.setReceiverAccount(senderAccount.getAccountNumber());
         creditTx.setDateTime(LocalDateTime.now());
         transactionRepository.save(creditTx);
 
@@ -176,7 +199,6 @@ public class UserController {
         return "transfer";
     }
 
-
     // ================== Transaction History ==================
     @GetMapping("/transactions")
     public String showTransactions(Model model, HttpSession session) {
@@ -184,13 +206,35 @@ public class UserController {
         if (loggedInUser == null) {
             return "redirect:/login";
         }
+        
         List<Transaction> transactions = transactionRepository.findByUser(loggedInUser);
 
-        // Format date/time
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy hh:mm a");
-        transactions.forEach(tx -> tx.setFormattedDateTime(tx.getDateTime().format(formatter)));
+        
+        // Calculate totals in Java, not in Thymeleaf
+        double totalCredits = 0.0;
+        double totalDebits = 0.0;
+        
+        if (transactions != null && !transactions.isEmpty()) {
+            for (Transaction tx : transactions) {
+                if (tx.getDateTime() != null) {
+                    tx.setFormattedDateTime(tx.getDateTime().format(formatter));
+                }
+                
+                // Calculate totals
+                if ("CREDIT".equals(tx.getType())) {
+                    totalCredits += tx.getAmount();
+                } else if ("DEBIT".equals(tx.getType())) {
+                    totalDebits += tx.getAmount();
+                }
+            }
+        }
 
-        model.addAttribute("transactions", transactions);
+        model.addAttribute("transactions", transactions != null ? transactions : List.of());
+        model.addAttribute("totalCredits", totalCredits);
+        model.addAttribute("totalDebits", totalDebits);
+        model.addAttribute("transactionCount", transactions != null ? transactions.size() : 0);
+        
         return "transactions";
     }
 
@@ -199,5 +243,52 @@ public class UserController {
     public String logout(HttpSession session) {
         session.invalidate();
         return "redirect:/login";
+    }
+
+    // ================== Create Admin (Temporary Method) ==================
+    @GetMapping("/force-create-admin")
+    @ResponseBody
+    public String forceCreateAdmin() {
+        try {
+            // Delete existing admin if any
+            User existingAdmin = userRepository.findByUsername("admin");
+            if (existingAdmin != null) {
+                userRepository.delete(existingAdmin);
+            }
+            
+            // Create new admin
+            User admin = new User();
+            admin.setName("Administrator");
+            admin.setEmail("admin@banking.com");
+            admin.setUsername("admin");
+            
+            // Encode password properly
+            String rawPassword = "admin123";
+            String encodedPassword = passwordEncoder.encode(rawPassword);
+            admin.setPassword(encodedPassword);
+            
+            admin.setRole("ADMIN");
+            admin.setActive(true);
+            admin.setCreatedAt(LocalDateTime.now());
+            
+            userRepository.save(admin);
+            
+            // Verify the password works
+            boolean verification = passwordEncoder.matches("admin123", admin.getPassword());
+            
+            return "<html><body style='font-family: Arial; padding: 20px;'>" +
+                   "<h2 style='color: green;'>✅ Admin Created!</h2>" +
+                   "<p><strong>Username:</strong> admin</p>" +
+                   "<p><strong>Password:</strong> admin123</p>" +
+                   "<p><strong>Password verification:</strong> " + 
+                   (verification ? "✅ SUCCESS" : "❌ FAILED") + "</p>" +
+                   "<p><strong>Encoded password:</strong> " + encodedPassword + "</p>" +
+                   "<p><a href='/login' style='background: #28a745; color: white; padding: 10px 20px; " +
+                   "text-decoration: none; border-radius: 5px;'>Go to Login</a></p>" +
+                   "</body></html>";
+                   
+        } catch (Exception e) {
+            return "<h2 style='color: red;'>Error: " + e.getMessage() + "</h2>";
+        }
     }
 }

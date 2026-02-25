@@ -26,16 +26,16 @@ public class ApiController {
     @Autowired
     private BCryptPasswordEncoder passwordEncoder;
 
-    // ================= REGISTER =================
     @PostMapping("/register")
     public String register(@RequestBody User user) {
-
         if (userRepository.findByUsername(user.getUsername()) != null) {
             return "Username already exists";
         }
 
         user.setRole("USER");
         user.setPassword(passwordEncoder.encode(user.getPassword()));
+        user.setCreatedAt(LocalDateTime.now());
+        user.setActive(true);
         userRepository.save(user);
 
         Account account = new Account();
@@ -49,10 +49,8 @@ public class ApiController {
         return "User registered successfully";
     }
 
-    // ================= LOGIN =================
     @PostMapping("/login")
     public String login(@RequestBody User user, HttpSession session) {
-
         User dbUser = userRepository.findByUsername(user.getUsername());
 
         if (dbUser == null ||
@@ -60,11 +58,13 @@ public class ApiController {
             return "Invalid username or password";
         }
 
+        dbUser.setLastLoginAt(LocalDateTime.now());
+        userRepository.save(dbUser);
+        
         session.setAttribute("loggedInUser", dbUser);
         return "Login successful";
     }
 
-    // ================= TRANSFER =================
     @PostMapping("/transfer")
     public String transfer(@RequestParam String receiverAccount,
                            @RequestParam Double amount,
@@ -106,20 +106,49 @@ public class ApiController {
         return "Transfer successful";
     }
 
-    // ================= TRANSACTIONS =================
     @GetMapping("/transactions")
     public List<Transaction> transactions(HttpSession session) {
-
         User loggedInUser = (User) session.getAttribute("loggedInUser");
         if (loggedInUser == null) return List.of();
-
         return transactionRepository.findByUser(loggedInUser);
     }
 
-    // ================= LOGOUT =================
     @PostMapping("/logout")
     public String logout(HttpSession session) {
         session.invalidate();
         return "Logged out successfully";
     }
+    @GetMapping("/create-first-admin")
+@ResponseBody
+public String createFirstAdmin() {
+    try {
+        // Check if any admin exists
+        List<User> allUsers = userRepository.findAll();
+        boolean adminExists = allUsers.stream()
+            .anyMatch(u -> "ADMIN".equals(u.getRole()));
+        
+        if (adminExists) {
+            return "Admin already exists! Check your database.";
+        }
+        
+        // Create admin user
+        User admin = new User();
+        admin.setName("System Admin");
+        admin.setEmail("admin@banking.com");
+        admin.setUsername("admin");
+        admin.setPassword(passwordEncoder.encode("admin123"));
+        admin.setRole("ADMIN");
+        admin.setActive(true);
+        admin.setCreatedAt(LocalDateTime.now());
+        
+        userRepository.save(admin);
+        
+        return "Admin created successfully!<br>" +
+               "Username: admin<br>" +
+               "Password: admin123<br>" +
+               "<a href='/login'>Go to Login Page</a>";
+    } catch (Exception e) {
+        return "Error creating admin: " + e.getMessage();
+    }
+}
 }
