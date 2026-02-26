@@ -1,13 +1,14 @@
-# Stage 1 - Build
-FROM maven:3.9.6-eclipse-temurin-17 AS builder
-WORKDIR /app
-COPY pom.xml .
-COPY src ./src
-RUN mvn clean package -DskipTests
+# Use official Java 17 image
+FROM eclipse-temurin:17-jdk-jammy
 
-# Stage 2 - Run
-FROM eclipse-temurin:17-jdk
+# Set working directory
 WORKDIR /app
-COPY --from=builder /app/target/*.jar app.jar
+
+# Copy jar file
+COPY target/banking-app-0.0.1-SNAPSHOT.jar app.jar
+
+# Expose port (Render uses PORT env)
 EXPOSE 8080
-ENTRYPOINT ["java","-jar","app.jar"]
+
+# Run the application
+ENTRYPOINT ["java","-jar","/app/app.jar"]
