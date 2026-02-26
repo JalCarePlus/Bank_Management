@@ -84,6 +84,7 @@ public class User {
     }
 
     // Getters and Setters for new fields
+    @Transient
     public boolean isActive() { 
         return active; 
     }
