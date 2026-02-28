@@ -59,12 +59,13 @@ public class UserController {
 
         user.setRole("USER");
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-        user.setActive(true);
+        // active is @Transient, won't be saved to DB
+        // user.setActive(true);
 
-        // ⚠️ Only set if column exists in DB
-        try {
-            user.setCreatedAt(LocalDateTime.now());
-        } catch (Exception ignored) {}
+        // ⚠️ createdAt is @Transient, won't be saved
+        // try {
+        //     user.setCreatedAt(LocalDateTime.now());
+        // } catch (Exception ignored) {}
 
         userRepository.save(user);
 
@@ -103,10 +104,15 @@ public class UserController {
         if (existingUser != null &&
                 passwordEncoder.matches(user.getPassword(), existingUser.getPassword())) {
 
-            existingUser.setLastLoginAt(LocalDateTime.now());
-            userRepository.save(existingUser);
+            // Don't try to set lastLoginAt as it's @Transient
+            // existingUser.setLastLoginAt(LocalDateTime.now());
+            // userRepository.save(existingUser);
 
+            // Store user in session
             session.setAttribute("loggedInUser", existingUser);
+            
+            // Also store role separately if needed elsewhere
+            session.setAttribute("userRole", existingUser.getRole());
 
             if ("ADMIN".equals(existingUser.getRole())) {
                 return "redirect:/admin/dashboard";
@@ -257,14 +263,16 @@ public class UserController {
             admin.setEmail("admin@banking.com");
             admin.setUsername("admin");
             admin.setRole("ADMIN");
-            admin.setActive(true);
+            // active is @Transient
+            // admin.setActive(true);
         }
 
         admin.setPassword(passwordEncoder.encode("admin123"));
 
-        try {
-            admin.setCreatedAt(LocalDateTime.now());
-        } catch (Exception ignored) {}
+        // createdAt is @Transient
+        // try {
+        //     admin.setCreatedAt(LocalDateTime.now());
+        // } catch (Exception ignored) {}
 
         userRepository.save(admin);
 
