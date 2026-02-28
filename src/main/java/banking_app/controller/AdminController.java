@@ -37,20 +37,26 @@ public class AdminController {
     // ===============================
     // 📊 Admin Dashboard
     // ===============================
-    @GetMapping("/dashboard")
-    public String adminDashboard(Model model, HttpSession session) {
-        if (!isAdmin(session)) {
-            return "redirect:/login";
-        }
-
-        long totalUsers = userRepository.count();
-        long totalTransactions = transactionRepository.count();
-
-        model.addAttribute("totalUsers", totalUsers);
-        model.addAttribute("totalTransactions", totalTransactions);
-
-        return "admin/dashboard";
+   @GetMapping("/dashboard")
+public String adminDashboard(Model model, HttpSession session) {
+    if (!isAdmin(session)) {
+        return "redirect:/login";
     }
+
+    long totalUsers = userRepository.count();
+    long totalTransactions = transactionRepository.count();
+    
+    // Calculate total admins
+    long totalAdmins = userRepository.findAll().stream()
+        .filter(u -> "ADMIN".equals(u.getRole()))
+        .count();
+
+    model.addAttribute("totalUsers", totalUsers);
+    model.addAttribute("totalTransactions", totalTransactions);
+    model.addAttribute("totalAdmins", totalAdmins);
+
+    return "admin/dashboard";
+}
 
     // ===============================
     // 👥 View Users (with pagination & search)
