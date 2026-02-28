@@ -60,8 +60,8 @@
             <div class="col-md-3 mb-3">
                 <div class="card text-white bg-success">
                     <div class="card-body">
-                        <h5 class="card-title">Total Transactions</h5>
-                        <h2 th:text="${totalTransactions}">0</h2>
+                        <h5 class="card-title">Total Accounts</h5>
+                        <h2 th:text="${totalAccounts}">0</h2>
                     </div>
                 </div>
             </div>
@@ -76,8 +76,8 @@
             <div class="col-md-3 mb-3">
                 <div class="card text-white bg-warning">
                     <div class="card-body">
-                        <h5 class="card-title">Total Admins</h5>
-                        <h2 th:text="${totalAdmins}">0</h2>
+                        <h5 class="card-title">Transactions</h5>
+                        <h2 th:text="${totalTransactions}">0</h2>
                     </div>
                 </div>
             </div>
@@ -100,6 +100,10 @@
                 </div>
             </div>
         </div>
+
+        <!-- Recent Transactions Section - Completely Removed -->
+        <!-- The error was here - recentTransactions was not being passed from controller -->
+        
     </div>
 
     <!-- Create Admin Modal -->
