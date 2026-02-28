@@ -98,43 +98,38 @@ public String loginUser(@ModelAttribute("user") User user,
         
         User existingUser = userRepository.findByUsername(user.getUsername());
 
-        if (existingUser != null) {
-            System.out.println("User found: " + existingUser.getUsername() + ", Role: " + existingUser.getRole());
+        if (existingUser != null && 
+            passwordEncoder.matches(user.getPassword(), existingUser.getPassword())) {
             
-            if (passwordEncoder.matches(user.getPassword(), existingUser.getPassword())) {
-                System.out.println("Password matched");
-                
-                // Store user in session
-                session.setAttribute("loggedInUser", existingUser);
-                session.setAttribute("userRole", existingUser.getRole());
+            System.out.println("Login successful for user: " + existingUser.getUsername());
+            
+            // Store user in session
+            session.setAttribute("loggedInUser", existingUser);
 
-                if ("ADMIN".equals(existingUser.getRole())) {
-                    System.out.println("Redirecting to admin dashboard");
-                    return "redirect:/admin/dashboard";
-                } else {
-                    // Get or create account for user
-                    Account account = accountRepository.findByUser(existingUser);
-                    if (account == null) {
-                        System.out.println("No account found, creating new account");
-                        account = new Account();
-                        account.setUser(existingUser);
-                        account.setBalance(1000.0);
-                        account.setAccountNumber(generateAccountNumber());
-                        account = accountRepository.save(account);
-                    }
-                    
-                    model.addAttribute("user", existingUser);
-                    model.addAttribute("account", account);
-                    System.out.println("Redirecting to user dashboard");
-                    return "dashboard";
-                }
+            if ("ADMIN".equals(existingUser.getRole())) {
+                return "redirect:/admin/dashboard";
             } else {
-                System.out.println("Password did not match");
-                model.addAttribute("error", "Invalid username or password");
-                return "login";
+                // Get account for user - with null check
+                Account account = accountRepository.findByUser(existingUser);
+                
+                // If account doesn't exist, create one
+                if (account == null) {
+                    System.out.println("No account found, creating new account");
+                    account = new Account();
+                    account.setUser(existingUser);
+                    account.setBalance(1000.0);
+                    account.setAccountNumber(generateAccountNumber());
+                    account = accountRepository.save(account);
+                }
+                
+                // Add attributes to model
+                model.addAttribute("user", existingUser);
+                model.addAttribute("account", account);
+                
+                return "dashboard";
             }
         } else {
-            System.out.println("User not found: " + user.getUsername());
+            System.out.println("Login failed: invalid credentials");
             model.addAttribute("error", "Invalid username or password");
             return "login";
         }
