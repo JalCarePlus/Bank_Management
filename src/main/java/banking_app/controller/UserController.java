@@ -94,39 +94,59 @@ public class UserController {
         return "login";
     }
 
-    @PostMapping("/login")
-    public String loginUser(@ModelAttribute("user") User user,
-                            Model model,
-                            HttpSession session) {
-
+@PostMapping("/login")
+public String loginUser(@ModelAttribute("user") User user,
+                        Model model,
+                        HttpSession session) {
+    try {
+        System.out.println("Login attempt for username: " + user.getUsername());
+        
         User existingUser = userRepository.findByUsername(user.getUsername());
 
-        if (existingUser != null &&
-                passwordEncoder.matches(user.getPassword(), existingUser.getPassword())) {
-
-            // Don't try to set lastLoginAt as it's @Transient
-            // existingUser.setLastLoginAt(LocalDateTime.now());
-            // userRepository.save(existingUser);
-
-            // Store user in session
-            session.setAttribute("loggedInUser", existingUser);
+        if (existingUser != null) {
+            System.out.println("User found in database: " + existingUser.getUsername());
+            System.out.println("User role: " + existingUser.getRole());
             
-            // Also store role separately if needed elsewhere
-            session.setAttribute("userRole", existingUser.getRole());
+            if (passwordEncoder.matches(user.getPassword(), existingUser.getPassword())) {
+                System.out.println("Password matched successfully");
+                
+                session.setAttribute("loggedInUser", existingUser);
 
-            if ("ADMIN".equals(existingUser.getRole())) {
-                return "redirect:/admin/dashboard";
+                if ("ADMIN".equals(existingUser.getRole())) {
+                    System.out.println("Redirecting to admin dashboard");
+                    return "redirect:/admin/dashboard";
+                } else {
+                    Account account = accountRepository.findByUser(existingUser);
+                    if (account == null) {
+                        System.out.println("No account found for user, creating one...");
+                        account = new Account();
+                        account.setUser(existingUser);
+                        account.setBalance(1000.0);
+                        account.setAccountNumber(generateAccountNumber());
+                        accountRepository.save(account);
+                    }
+                    
+                    model.addAttribute("user", existingUser);
+                    model.addAttribute("account", account);
+                    System.out.println("Redirecting to user dashboard");
+                    return "dashboard";
+                }
             } else {
-                Account account = accountRepository.findByUser(existingUser);
-                model.addAttribute("user", existingUser);
-                model.addAttribute("account", account);
-                return "dashboard";
+                System.out.println("Password did not match");
             }
         } else {
-            model.addAttribute("error", "Invalid username or password");
-            return "login";
+            System.out.println("User not found: " + user.getUsername());
         }
+        
+        model.addAttribute("error", "Invalid username or password");
+        return "login";
+    } catch (Exception e) {
+        System.out.println("Error during login: " + e.getMessage());
+        e.printStackTrace();
+        model.addAttribute("error", "Login error: " + e.getMessage());
+        return "login";
     }
+}
 
     // ================== Dashboard ==================
     @GetMapping("/dashboard")
