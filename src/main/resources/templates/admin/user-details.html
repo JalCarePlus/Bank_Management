@@ -72,35 +72,13 @@
                                 <td th:text="${user.email}">john@example.com</td>
                             </tr>
                             <tr>
-                                <th>Phone:</th>
-                                <td th:text="${user.phoneNumber ?: 'Not provided'}">1234567890</td>
-                            </tr>
-                            <tr>
                                 <th>Role:</th>
                                 <td>
                                     <span class="badge" th:classappend="${user.role == 'ADMIN' ? 'bg-warning' : 'bg-info'}"
                                           th:text="${user.role}">USER</span>
                                 </td>
                             </tr>
-                            <tr>
-                                <th>Status:</th>
-                                <td>
-                                    <span class="badge" th:classappend="${user.active ? 'bg-success' : 'bg-danger'}"
-                                          th:text="${user.active ? 'Active' : 'Inactive'}">Active</span>
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>Joined:</th>
-                                <td th:text="${#temporals.format(user.createdAt, 'dd/MM/yyyy')}">01/01/2024</td>
-                            </tr>
                         </table>
-
-                        <form th:action="@{/admin/user/{id}/toggle-status(id=${user.id})}" method="post">
-                            <button type="submit" class="btn w-100"
-                                    th:classappend="${user.active ? 'btn-warning' : 'btn-success'}">
-                                <span th:text="${user.active ? 'Deactivate User' : 'Activate User'}">Toggle Status</span>
-                            </button>
-                        </form>
                     </div>
                 </div>
             </div>
@@ -136,10 +114,10 @@
                         <h5>Transaction History</h5>
                     </div>
                     <div class="card-body">
-                        <div th:if="${transactions.isEmpty()}" class="text-center py-4">
+                        <div th:if="${transactions == null or transactions.isEmpty()}" class="text-center py-4">
                             <p class="text-muted">No transactions found</p>
                         </div>
-                        <table th:unless="${transactions.isEmpty()}" class="table table-bordered">
+                        <table th:unless="${transactions == null or transactions.isEmpty()}" class="table table-bordered">
                             <thead>
                                 <tr>
                                     <th>Date/Time</th>
