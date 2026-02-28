@@ -104,26 +104,28 @@ public String loginUser(@ModelAttribute("user") User user,
         User existingUser = userRepository.findByUsername(user.getUsername());
 
         if (existingUser != null) {
-            System.out.println("User found in database: " + existingUser.getUsername());
-            System.out.println("User role: " + existingUser.getRole());
+            System.out.println("User found: " + existingUser.getUsername() + ", Role: " + existingUser.getRole());
             
             if (passwordEncoder.matches(user.getPassword(), existingUser.getPassword())) {
-                System.out.println("Password matched successfully");
+                System.out.println("Password matched");
                 
+                // Store user in session
                 session.setAttribute("loggedInUser", existingUser);
+                session.setAttribute("userRole", existingUser.getRole());
 
                 if ("ADMIN".equals(existingUser.getRole())) {
                     System.out.println("Redirecting to admin dashboard");
                     return "redirect:/admin/dashboard";
                 } else {
+                    // Get or create account for user
                     Account account = accountRepository.findByUser(existingUser);
                     if (account == null) {
-                        System.out.println("No account found for user, creating one...");
+                        System.out.println("No account found, creating new account");
                         account = new Account();
                         account.setUser(existingUser);
                         account.setBalance(1000.0);
                         account.setAccountNumber(generateAccountNumber());
-                        accountRepository.save(account);
+                        account = accountRepository.save(account);
                     }
                     
                     model.addAttribute("user", existingUser);
@@ -133,21 +135,21 @@ public String loginUser(@ModelAttribute("user") User user,
                 }
             } else {
                 System.out.println("Password did not match");
+                model.addAttribute("error", "Invalid username or password");
+                return "login";
             }
         } else {
             System.out.println("User not found: " + user.getUsername());
+            model.addAttribute("error", "Invalid username or password");
+            return "login";
         }
-        
-        model.addAttribute("error", "Invalid username or password");
-        return "login";
     } catch (Exception e) {
-        System.out.println("Error during login: " + e.getMessage());
+        System.out.println("ERROR in login: " + e.getMessage());
         e.printStackTrace();
-        model.addAttribute("error", "Login error: " + e.getMessage());
+        model.addAttribute("error", "System error: " + e.getMessage());
         return "login";
     }
 }
-
     // ================== Dashboard ==================
     @GetMapping("/dashboard")
     public String showDashboard(Model model, HttpSession session) {
