@@ -43,15 +43,15 @@ public class UserController {
     }
 
     @PostMapping("/register")
-    public String registerUser(@ModelAttribute User user, Model model) {
-
+public String registerUser(@ModelAttribute User user, Model model) {
+    try {
         // ✅ Username check
         if (userRepository.findByUsername(user.getUsername()) != null) {
             model.addAttribute("error", "Username already exists!");
             return "register";
         }
 
-        // ✅ Email check (IMPORTANT for PostgreSQL)
+        // ✅ Email check
         if (userRepository.findByEmail(user.getEmail()) != null) {
             model.addAttribute("error", "Email already registered!");
             return "register";
@@ -59,34 +59,29 @@ public class UserController {
 
         user.setRole("USER");
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-        // active is @Transient, won't be saved to DB
-        // user.setActive(true);
-
-        // ⚠️ createdAt is @Transient, won't be saved
-        // try {
-        //     user.setCreatedAt(LocalDateTime.now());
-        // } catch (Exception ignored) {}
-
-        userRepository.save(user);
+        // Don't set @Transient fields like active, createdAt
+        
+        User savedUser = userRepository.save(user);
+        System.out.println("User saved with ID: " + savedUser.getId());
 
         // Create account automatically
         Account account = new Account();
-        account.setUser(user);
+        account.setUser(savedUser);
         account.setBalance(1000.0);
         account.setAccountNumber(generateAccountNumber());
         accountRepository.save(account);
 
         model.addAttribute("message",
-                "Registration successful! Your Account Number: " + account.getAccountNumber());
-
+                "Registration successful! Please login with your credentials.");
+        return "login";
+        
+    } catch (Exception e) {
+        System.out.println("Registration error: " + e.getMessage());
+        e.printStackTrace();
+        model.addAttribute("error", "Registration failed: " + e.getMessage());
         return "register";
     }
-
-    private String generateAccountNumber() {
-        long number = 1000000000L + (long) (Math.random() * 8999999999L);
-        return String.valueOf(number);
-    }
-
+}
     // ================== Login ==================
     @GetMapping("/login")
     public String showLoginForm(Model model) {
