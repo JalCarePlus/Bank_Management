@@ -50,7 +50,9 @@
         <!-- Create Admin Button -->
         <div class="row mt-3">
             <div class="col-12">
-                <a th:href="@{/admin/create-admin}" class="btn btn-primary mb-3">Create New Admin</a>
+                <button type="button" class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#createAdminModal">
+                    Create New Admin
+                </button>
             </div>
         </div>
 
@@ -61,8 +63,8 @@
                     <div class="card-body">
                         <form method="get" class="row">
                             <div class="col-md-10">
-                                <input type="text" class="form-control" name="search" 
-                                       th:value="${search}" placeholder="Search by username, email, or name...">
+                                <input type="text" class="form-control" name="keyword" 
+                                       th:value="${keyword}" placeholder="Search by username, email, or name...">
                             </div>
                             <div class="col-md-2">
                                 <button type="submit" class="btn btn-primary w-100">Search</button>
@@ -90,12 +92,11 @@
                                     <th>Email</th>
                                     <th>Role</th>
                                     <th>Balance</th>
-                                    <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr th:each="user : ${userPage.content}">
+                                <tr th:each="user : ${users}">
                                     <td th:text="${user.id}">1</td>
                                     <td th:text="${user.username}">john_doe</td>
                                     <td th:text="${user.name}">John Doe</td>
@@ -105,47 +106,68 @@
                                               th:text="${user.role}">USER</span>
                                     </td>
                                     <td>
-                                        <span th:if="${userAccounts.containsKey(user.id)}">
+                                        <span th:if="${userAccounts != null and userAccounts.containsKey(user.id)}">
                                             ₹<span th:text="${#numbers.formatDecimal(userAccounts[user.id].balance, 0, 2)}">1000.00</span>
                                         </span>
-                                        <span th:unless="${userAccounts.containsKey(user.id)}" class="text-muted">No account</span>
-                                    </td>
-                                    <td>
-                                        <span class="badge" th:classappend="${user.active ? 'bg-success' : 'bg-danger'}"
-                                              th:text="${user.active ? 'Active' : 'Inactive'}">Active</span>
+                                        <span th:unless="${userAccounts != null and userAccounts.containsKey(user.id)}" class="text-muted">No account</span>
                                     </td>
                                     <td>
                                         <a th:href="@{/admin/user/{id}(id=${user.id})}" class="btn btn-sm btn-info">View</a>
-                                        <form th:action="@{/admin/user/{id}/toggle-status(id=${user.id})}" 
-                                              method="post" style="display: inline;">
-                                            <button type="submit" class="btn btn-sm" 
-                                                    th:classappend="${user.active ? 'btn-warning' : 'btn-success'}">
-                                                <span th:text="${user.active ? 'Deactivate' : 'Activate'}">Toggle</span>
-                                            </button>
-                                        </form>
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
 
                         <!-- Pagination -->
-                        <nav th:if="${userPage.totalPages > 1}" class="mt-4">
+                        <nav th:if="${totalPages != null and totalPages > 1}" class="mt-4">
                             <ul class="pagination justify-content-center">
                                 <li class="page-item" th:classappend="${currentPage == 0} ? 'disabled'">
-                                    <a class="page-link" th:href="@{/admin/users(page=${currentPage - 1}, search=${search})}">Previous</a>
+                                    <a class="page-link" th:href="@{/admin/users(page=${currentPage - 1}, keyword=${keyword})}">Previous</a>
                                 </li>
-                                <li class="page-item" th:each="i : ${#numbers.sequence(0, userPage.totalPages - 1)}"
+                                <li class="page-item" th:each="i : ${#numbers.sequence(0, totalPages - 1)}"
                                     th:classappend="${i == currentPage} ? 'active'">
-                                    <a class="page-link" th:href="@{/admin/users(page=${i}, search=${search})}"
+                                    <a class="page-link" th:href="@{/admin/users(page=${i}, keyword=${keyword})}"
                                        th:text="${i + 1}">1</a>
                                 </li>
-                                <li class="page-item" th:classappend="${currentPage >= userPage.totalPages - 1} ? 'disabled'">
-                                    <a class="page-link" th:href="@{/admin/users(page=${currentPage + 1}, search=${search})}">Next</a>
+                                <li class="page-item" th:classappend="${currentPage >= totalPages - 1} ? 'disabled'">
+                                    <a class="page-link" th:href="@{/admin/users(page=${currentPage + 1}, keyword=${keyword})}">Next</a>
                                 </li>
                             </ul>
                         </nav>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Admin Modal -->
+    <div class="modal fade" id="createAdminModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Admin</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form th:action="@{/admin/create-admin}" method="post">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="username" class="form-label">Username</label>
+                            <input type="text" class="form-control" id="username" name="username" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Password</label>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Create Admin</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
