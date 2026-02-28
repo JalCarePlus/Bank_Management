@@ -35,6 +35,21 @@ public class UserController {
     @Autowired
     private BCryptPasswordEncoder passwordEncoder;
 
+    // ================== Generate Account Number ==================
+    private String generateAccountNumber() {
+        // Generate a 10-digit account number
+        long random = (long) (Math.random() * 9000000000L) + 1000000000L;
+        String accountNumber = String.valueOf(random);
+        
+        // Ensure it's unique (check if exists in database)
+        while (accountRepository.findByAccountNumber(accountNumber) != null) {
+            random = (long) (Math.random() * 9000000000L) + 1000000000L;
+            accountNumber = String.valueOf(random);
+        }
+        
+        return accountNumber;
+    }
+
     // ================== Registration ==================
     @GetMapping("/register")
     public String showRegistrationForm(Model model) {
@@ -43,45 +58,44 @@ public class UserController {
     }
 
     @PostMapping("/register")
-public String registerUser(@ModelAttribute User user, Model model) {
-    try {
-        // ✅ Username check
-        if (userRepository.findByUsername(user.getUsername()) != null) {
-            model.addAttribute("error", "Username already exists!");
+    public String registerUser(@ModelAttribute User user, Model model) {
+        try {
+            // ✅ Username check
+            if (userRepository.findByUsername(user.getUsername()) != null) {
+                model.addAttribute("error", "Username already exists!");
+                return "register";
+            }
+
+            // ✅ Email check
+            if (userRepository.findByEmail(user.getEmail()) != null) {
+                model.addAttribute("error", "Email already registered!");
+                return "register";
+            }
+
+            user.setRole("USER");
+            user.setPassword(passwordEncoder.encode(user.getPassword()));
+            
+            User savedUser = userRepository.save(user);
+            System.out.println("User saved with ID: " + savedUser.getId());
+
+            // Create account automatically
+            Account account = new Account();
+            account.setUser(savedUser);
+            account.setBalance(1000.0);
+            account.setAccountNumber(generateAccountNumber());
+            accountRepository.save(account);
+
+            model.addAttribute("message", "Registration successful! Please login.");
+            return "login";
+            
+        } catch (Exception e) {
+            System.out.println("Registration error: " + e.getMessage());
+            e.printStackTrace();
+            model.addAttribute("error", "Registration failed: " + e.getMessage());
             return "register";
         }
-
-        // ✅ Email check
-        if (userRepository.findByEmail(user.getEmail()) != null) {
-            model.addAttribute("error", "Email already registered!");
-            return "register";
-        }
-
-        user.setRole("USER");
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
-        // Don't set @Transient fields like active, createdAt
-        
-        User savedUser = userRepository.save(user);
-        System.out.println("User saved with ID: " + savedUser.getId());
-
-        // Create account automatically
-        Account account = new Account();
-        account.setUser(savedUser);
-        account.setBalance(1000.0);
-        account.setAccountNumber(generateAccountNumber());
-        accountRepository.save(account);
-
-        model.addAttribute("message",
-                "Registration successful! Please login with your credentials.");
-        return "login";
-        
-    } catch (Exception e) {
-        System.out.println("Registration error: " + e.getMessage());
-        e.printStackTrace();
-        model.addAttribute("error", "Registration failed: " + e.getMessage());
-        return "register";
     }
-}
+
     // ================== Login ==================
     @GetMapping("/login")
     public String showLoginForm(Model model) {
@@ -89,57 +103,55 @@ public String registerUser(@ModelAttribute User user, Model model) {
         return "login";
     }
 
-@PostMapping("/login")
-public String loginUser(@ModelAttribute("user") User user,
-                        Model model,
-                        HttpSession session) {
-    try {
-        System.out.println("Login attempt for username: " + user.getUsername());
-        
-        User existingUser = userRepository.findByUsername(user.getUsername());
-
-        if (existingUser != null && 
-            passwordEncoder.matches(user.getPassword(), existingUser.getPassword())) {
+    @PostMapping("/login")
+    public String loginUser(@ModelAttribute("user") User user,
+                            Model model,
+                            HttpSession session) {
+        try {
+            System.out.println("Login attempt for username: " + user.getUsername());
             
-            System.out.println("Login successful for user: " + existingUser.getUsername());
-            
-            // Store user in session
-            session.setAttribute("loggedInUser", existingUser);
+            User existingUser = userRepository.findByUsername(user.getUsername());
 
-            if ("ADMIN".equals(existingUser.getRole())) {
-                return "redirect:/admin/dashboard";
-            } else {
-                // Get account for user - with null check
-                Account account = accountRepository.findByUser(existingUser);
+            if (existingUser != null && 
+                passwordEncoder.matches(user.getPassword(), existingUser.getPassword())) {
                 
-                // If account doesn't exist, create one
-                if (account == null) {
-                    System.out.println("No account found, creating new account");
-                    account = new Account();
-                    account.setUser(existingUser);
-                    account.setBalance(1000.0);
-                    account.setAccountNumber(generateAccountNumber());
-                    account = accountRepository.save(account);
+                System.out.println("Login successful for user: " + existingUser.getUsername());
+                
+                session.setAttribute("loggedInUser", existingUser);
+
+                if ("ADMIN".equals(existingUser.getRole())) {
+                    return "redirect:/admin/dashboard";
+                } else {
+                    Account account = accountRepository.findByUser(existingUser);
+                    
+                    // If account doesn't exist, create one
+                    if (account == null) {
+                        System.out.println("No account found, creating new account");
+                        account = new Account();
+                        account.setUser(existingUser);
+                        account.setBalance(1000.0);
+                        account.setAccountNumber(generateAccountNumber());
+                        account = accountRepository.save(account);
+                    }
+                    
+                    model.addAttribute("user", existingUser);
+                    model.addAttribute("account", account);
+                    
+                    return "dashboard";
                 }
-                
-                // Add attributes to model
-                model.addAttribute("user", existingUser);
-                model.addAttribute("account", account);
-                
-                return "dashboard";
+            } else {
+                System.out.println("Login failed: invalid credentials");
+                model.addAttribute("error", "Invalid username or password");
+                return "login";
             }
-        } else {
-            System.out.println("Login failed: invalid credentials");
-            model.addAttribute("error", "Invalid username or password");
+        } catch (Exception e) {
+            System.out.println("ERROR in login: " + e.getMessage());
+            e.printStackTrace();
+            model.addAttribute("error", "System error: " + e.getMessage());
             return "login";
         }
-    } catch (Exception e) {
-        System.out.println("ERROR in login: " + e.getMessage());
-        e.printStackTrace();
-        model.addAttribute("error", "System error: " + e.getMessage());
-        return "login";
     }
-}
+
     // ================== Dashboard ==================
     @GetMapping("/dashboard")
     public String showDashboard(Model model, HttpSession session) {
@@ -197,7 +209,7 @@ public String loginUser(@ModelAttribute("user") User user,
         accountRepository.save(senderAccount);
         accountRepository.save(receiverAccount);
 
-        // Debit
+        // Debit transaction
         Transaction debitTx = new Transaction();
         debitTx.setUser(loggedInUser);
         debitTx.setAmount(amount);
@@ -206,7 +218,7 @@ public String loginUser(@ModelAttribute("user") User user,
         debitTx.setDateTime(LocalDateTime.now());
         transactionRepository.save(debitTx);
 
-        // Credit
+        // Credit transaction
         Transaction creditTx = new Transaction();
         creditTx.setUser(receiverAccount.getUser());
         creditTx.setAmount(amount);
@@ -275,17 +287,9 @@ public String loginUser(@ModelAttribute("user") User user,
             admin.setEmail("admin@banking.com");
             admin.setUsername("admin");
             admin.setRole("ADMIN");
-            // active is @Transient
-            // admin.setActive(true);
         }
 
         admin.setPassword(passwordEncoder.encode("admin123"));
-
-        // createdAt is @Transient
-        // try {
-        //     admin.setCreatedAt(LocalDateTime.now());
-        // } catch (Exception ignored) {}
-
         userRepository.save(admin);
 
         return "<h2>✅ Admin ready</h2>" +
