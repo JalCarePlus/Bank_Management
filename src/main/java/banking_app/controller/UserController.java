@@ -6,18 +6,19 @@ import banking_app.entity.Transaction;
 import banking_app.repository.AccountRepository;
 import banking_app.repository.UserRepository;
 import banking_app.repository.TransactionRepository;
-import org.springframework.transaction.annotation.Transactional;
+
 import jakarta.servlet.http.HttpSession;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Controller;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-
 
 @Controller
 public class UserController {
@@ -30,7 +31,7 @@ public class UserController {
 
     @Autowired
     private TransactionRepository transactionRepository;
-    
+
     @Autowired
     private BCryptPasswordEncoder passwordEncoder;
 
@@ -43,26 +44,40 @@ public class UserController {
 
     @PostMapping("/register")
     public String registerUser(@ModelAttribute User user, Model model) {
-        // Check if username already exists
+
+        // ✅ Username check
         if (userRepository.findByUsername(user.getUsername()) != null) {
             model.addAttribute("error", "Username already exists!");
             return "register";
         }
-        
+
+        // ✅ Email check (IMPORTANT for PostgreSQL)
+        if (userRepository.findByEmail(user.getEmail()) != null) {
+            model.addAttribute("error", "Email already registered!");
+            return "register";
+        }
+
         user.setRole("USER");
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-        user.setCreatedAt(LocalDateTime.now());
         user.setActive(true);
+
+        // ⚠️ Only set if column exists in DB
+        try {
+            user.setCreatedAt(LocalDateTime.now());
+        } catch (Exception ignored) {}
+
         userRepository.save(user);
 
-        // Create account automatically with initial balance
+        // Create account automatically
         Account account = new Account();
         account.setUser(user);
         account.setBalance(1000.0);
         account.setAccountNumber(generateAccountNumber());
         accountRepository.save(account);
 
-        model.addAttribute("message", "Registration successful! Your Account Number: " + account.getAccountNumber());
+        model.addAttribute("message",
+                "Registration successful! Your Account Number: " + account.getAccountNumber());
+
         return "register";
     }
 
@@ -79,25 +94,20 @@ public class UserController {
     }
 
     @PostMapping("/login")
-    public String loginUser(@ModelAttribute("user") User user, 
-                           Model model, 
-                           HttpSession session) {
-        
-        // Find user by username
+    public String loginUser(@ModelAttribute("user") User user,
+                            Model model,
+                            HttpSession session) {
+
         User existingUser = userRepository.findByUsername(user.getUsername());
-        
-        // Check if user exists and password matches
-        if (existingUser != null && 
-            passwordEncoder.matches(user.getPassword(), existingUser.getPassword())) {
-            
-            // Update last login time
+
+        if (existingUser != null &&
+                passwordEncoder.matches(user.getPassword(), existingUser.getPassword())) {
+
             existingUser.setLastLoginAt(LocalDateTime.now());
             userRepository.save(existingUser);
-            
-            // Store in session
+
             session.setAttribute("loggedInUser", existingUser);
 
-            // Redirect based on role
             if ("ADMIN".equals(existingUser.getRole())) {
                 return "redirect:/admin/dashboard";
             } else {
@@ -107,7 +117,6 @@ public class UserController {
                 return "dashboard";
             }
         } else {
-            // Invalid credentials
             model.addAttribute("error", "Invalid username or password");
             return "login";
         }
@@ -117,30 +126,26 @@ public class UserController {
     @GetMapping("/dashboard")
     public String showDashboard(Model model, HttpSession session) {
         User loggedInUser = (User) session.getAttribute("loggedInUser");
-        if (loggedInUser == null) {
-            return "redirect:/login";
-        }
-        
+        if (loggedInUser == null) return "redirect:/login";
+
         Account account = accountRepository.findByUser(loggedInUser);
         model.addAttribute("user", loggedInUser);
         model.addAttribute("account", account);
         return "dashboard";
     }
 
-    // ================== Transfer Money ==================
+    // ================== Transfer ==================
     @GetMapping("/transfer")
     public String showTransferPage(Model model, HttpSession session) {
         User loggedInUser = (User) session.getAttribute("loggedInUser");
-        if (loggedInUser == null) {
-            return "redirect:/login";
-        }
-        
+        if (loggedInUser == null) return "redirect:/login";
+
         Account account = accountRepository.findByUser(loggedInUser);
         model.addAttribute("user", loggedInUser);
         model.addAttribute("account", account);
         return "transfer";
     }
-    
+
     @Transactional
     @PostMapping("/transfer")
     public String transferMoney(@RequestParam("receiverAccount") String receiverAccountNumber,
@@ -149,9 +154,7 @@ public class UserController {
                                 HttpSession session) {
 
         User loggedInUser = (User) session.getAttribute("loggedInUser");
-        if (loggedInUser == null) {
-            return "redirect:/login";
-        }
+        if (loggedInUser == null) return "redirect:/login";
 
         Account senderAccount = accountRepository.findByUser(loggedInUser);
         Account receiverAccount = accountRepository.findByAccountNumber(receiverAccountNumber);
@@ -170,13 +173,13 @@ public class UserController {
             return "transfer";
         }
 
-        // Perform transfer
         senderAccount.setBalance(senderAccount.getBalance() - amount);
         receiverAccount.setBalance(receiverAccount.getBalance() + amount);
+
         accountRepository.save(senderAccount);
         accountRepository.save(receiverAccount);
 
-        // Record transactions
+        // Debit
         Transaction debitTx = new Transaction();
         debitTx.setUser(loggedInUser);
         debitTx.setAmount(amount);
@@ -185,6 +188,7 @@ public class UserController {
         debitTx.setDateTime(LocalDateTime.now());
         transactionRepository.save(debitTx);
 
+        // Credit
         Transaction creditTx = new Transaction();
         creditTx.setUser(receiverAccount.getUser());
         creditTx.setAmount(amount);
@@ -200,34 +204,28 @@ public class UserController {
         return "transfer";
     }
 
-    // ================== Transaction History ==================
+    // ================== Transactions ==================
     @GetMapping("/transactions")
     public String showTransactions(Model model, HttpSession session) {
+
         User loggedInUser = (User) session.getAttribute("loggedInUser");
-        if (loggedInUser == null) {
-            return "redirect:/login";
-        }
-        
+        if (loggedInUser == null) return "redirect:/login";
+
         List<Transaction> transactions = transactionRepository.findByUser(loggedInUser);
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy hh:mm a");
-        
-        // Calculate totals in Java, not in Thymeleaf
+
         double totalCredits = 0.0;
         double totalDebits = 0.0;
-        
-        if (transactions != null && !transactions.isEmpty()) {
+
+        if (transactions != null) {
             for (Transaction tx : transactions) {
                 if (tx.getDateTime() != null) {
                     tx.setFormattedDateTime(tx.getDateTime().format(formatter));
                 }
-                
-                // Calculate totals
-                if ("CREDIT".equals(tx.getType())) {
-                    totalCredits += tx.getAmount();
-                } else if ("DEBIT".equals(tx.getType())) {
-                    totalDebits += tx.getAmount();
-                }
+
+                if ("CREDIT".equals(tx.getType())) totalCredits += tx.getAmount();
+                if ("DEBIT".equals(tx.getType())) totalDebits += tx.getAmount();
             }
         }
 
@@ -235,7 +233,7 @@ public class UserController {
         model.addAttribute("totalCredits", totalCredits);
         model.addAttribute("totalDebits", totalDebits);
         model.addAttribute("transactionCount", transactions != null ? transactions.size() : 0);
-        
+
         return "transactions";
     }
 
@@ -246,50 +244,33 @@ public class UserController {
         return "redirect:/login";
     }
 
-    // ================== Create Admin (Temporary Method) ==================
+    // ================== Force Create Admin ==================
     @GetMapping("/force-create-admin")
     @ResponseBody
     public String forceCreateAdmin() {
-        try {
-            // Delete existing admin if any
-            User existingAdmin = userRepository.findByUsername("admin");
-            if (existingAdmin != null) {
-                userRepository.delete(existingAdmin);
-            }
-            
-            // Create new admin
-            User admin = new User();
+
+        User admin = userRepository.findByUsername("admin");
+
+        if (admin == null) {
+            admin = new User();
             admin.setName("Administrator");
             admin.setEmail("admin@banking.com");
             admin.setUsername("admin");
-            
-            // Encode password properly
-            String rawPassword = "admin123";
-            String encodedPassword = passwordEncoder.encode(rawPassword);
-            admin.setPassword(encodedPassword);
-            
             admin.setRole("ADMIN");
             admin.setActive(true);
-            admin.setCreatedAt(LocalDateTime.now());
-            
-            userRepository.save(admin);
-            
-            // Verify the password works
-            boolean verification = passwordEncoder.matches("admin123", admin.getPassword());
-            
-            return "<html><body style='font-family: Arial; padding: 20px;'>" +
-                   "<h2 style='color: green;'>✅ Admin Created!</h2>" +
-                   "<p><strong>Username:</strong> admin</p>" +
-                   "<p><strong>Password:</strong> admin123</p>" +
-                   "<p><strong>Password verification:</strong> " + 
-                   (verification ? "✅ SUCCESS" : "❌ FAILED") + "</p>" +
-                   "<p><strong>Encoded password:</strong> " + encodedPassword + "</p>" +
-                   "<p><a href='/login' style='background: #28a745; color: white; padding: 10px 20px; " +
-                   "text-decoration: none; border-radius: 5px;'>Go to Login</a></p>" +
-                   "</body></html>";
-                   
-        } catch (Exception e) {
-            return "<h2 style='color: red;'>Error: " + e.getMessage() + "</h2>";
         }
+
+        admin.setPassword(passwordEncoder.encode("admin123"));
+
+        try {
+            admin.setCreatedAt(LocalDateTime.now());
+        } catch (Exception ignored) {}
+
+        userRepository.save(admin);
+
+        return "<h2>✅ Admin ready</h2>" +
+               "<p>Username: admin</p>" +
+               "<p>Password: admin123</p>" +
+               "<a href='/login'>Login</a>";
     }
 }
