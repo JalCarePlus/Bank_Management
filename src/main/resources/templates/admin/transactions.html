@@ -47,64 +47,29 @@
             </div>
         </div>
 
-        <!-- Filter Form -->
-        <div class="row mt-3">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-body">
-                        <form method="get" class="row">
-                            <div class="col-md-3">
-                                <select class="form-select" name="type">
-                                    <option value="">All Types</option>
-                                    <option value="DEBIT" th:selected="${type == 'DEBIT'}">DEBIT</option>
-                                    <option value="CREDIT" th:selected="${type == 'CREDIT'}">CREDIT</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <input type="text" class="form-control" name="username" th:value="${username}" 
-                                       placeholder="Username">
-                            </div>
-                            <div class="col-md-3">
-                                <button type="submit" class="btn btn-primary">Apply Filter</button>
-                                <a th:href="@{/admin/transactions}" class="btn btn-secondary">Clear</a>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Summary Stats -->
         <div class="row mt-4">
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <div class="card bg-primary text-white">
                     <div class="card-body">
                         <h6>Total Transactions</h6>
-                        <h4 th:text="${transactionPage != null ? transactionPage.totalElements : 0}">0</h4>
+                        <h4 th:text="${totalTransactions != null ? totalTransactions : 0}">0</h4>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <div class="card bg-success text-white">
                     <div class="card-body">
                         <h6>Total Credits</h6>
-                        <h4>₹<span th:text="${#numbers.formatDecimal(creditTotal != null ? creditTotal : 0, 0, 2)}">0.00</span></h4>
+                        <h4>₹<span th:text="${#numbers.formatDecimal(totalCredits != null ? totalCredits : 0, 0, 2)}">0.00</span></h4>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <div class="card bg-danger text-white">
                     <div class="card-body">
                         <h6>Total Debits</h6>
-                        <h4>₹<span th:text="${#numbers.formatDecimal(debitTotal != null ? debitTotal : 0, 0, 2)}">0.00</span></h4>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card bg-info text-white">
-                    <div class="card-body">
-                        <h6>Active Users</h6>
-                        <h4 th:text="${activeUsers != null ? activeUsers : 0}">0</h4>
+                        <h4>₹<span th:text="${#numbers.formatDecimal(totalDebits != null ? totalDebits : 0, 0, 2)}">0.00</span></h4>
                     </div>
                 </div>
             </div>
@@ -118,10 +83,10 @@
                         <h5>Transaction List</h5>
                     </div>
                     <div class="card-body">
-                        <div th:if="${transactionPage == null or transactionPage.isEmpty()}" class="text-center py-5">
+                        <div th:if="${transactions == null or transactions.isEmpty()}" class="text-center py-5">
                             <p class="text-muted">No transactions found</p>
                         </div>
-                        <div th:unless="${transactionPage == null or transactionPage.isEmpty()}">
+                        <div th:unless="${transactions == null or transactions.isEmpty()}">
                             <table class="table table-bordered table-hover">
                                 <thead>
                                     <tr>
@@ -133,7 +98,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr th:each="tx : ${transactionPage.content}">
+                                    <tr th:each="tx : ${transactions}">
                                         <td th:text="${tx.formattedDateTime}">2024-01-01 10:30</td>
                                         <td>
                                             <a th:href="@{/admin/user/{id}(id=${tx.user.id})}" 
@@ -151,23 +116,6 @@
                                     </tr>
                                 </tbody>
                             </table>
-
-                            <!-- Pagination -->
-                            <nav th:if="${totalPages > 1}" class="mt-4">
-                                <ul class="pagination justify-content-center">
-                                    <li class="page-item" th:classappend="${currentPage == 0} ? 'disabled'">
-                                        <a class="page-link" th:href="@{/admin/transactions(page=${currentPage - 1}, type=${type}, username=${username})}">Previous</a>
-                                    </li>
-                                    <li class="page-item" th:each="i : ${#numbers.sequence(0, totalPages - 1)}"
-                                        th:classappend="${i == currentPage} ? 'active'">
-                                        <a class="page-link" th:href="@{/admin/transactions(page=${i}, type=${type}, username=${username})}"
-                                           th:text="${i + 1}">1</a>
-                                    </li>
-                                    <li class="page-item" th:classappend="${currentPage >= totalPages - 1} ? 'disabled'">
-                                        <a class="page-link" th:href="@{/admin/transactions(page=${currentPage + 1}, type=${type}, username=${username})}">Next</a>
-                                    </li>
-                                </ul>
-                            </nav>
                         </div>
                     </div>
                 </div>
