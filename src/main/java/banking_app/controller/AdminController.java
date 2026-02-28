@@ -37,27 +37,41 @@ public class AdminController {
     // ===============================
     // 📊 Admin Dashboard
     // ===============================
-   @GetMapping("/dashboard")
+  @GetMapping("/dashboard")
 public String adminDashboard(Model model, HttpSession session) {
     if (!isAdmin(session)) {
         return "redirect:/login";
     }
 
     long totalUsers = userRepository.count();
+    long totalAccounts = accountRepository.count();
     long totalTransactions = transactionRepository.count();
     
-    // Calculate total admins
-    long totalAdmins = userRepository.findAll().stream()
-        .filter(u -> "ADMIN".equals(u.getRole()))
-        .count();
+    // Calculate total balance
+    List<Account> allAccounts = accountRepository.findAll();
+    double totalBalance = allAccounts.stream()
+        .mapToDouble(Account::getBalance)
+        .sum();
+    
+    // Get recent transactions (last 10)
+    List<Transaction> recentTransactions = transactionRepository.findTop10ByOrderByDateTimeDesc();
+    
+    // Format dates
+    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+    recentTransactions.forEach(tx -> {
+        if (tx.getDateTime() != null) {
+            tx.setFormattedDateTime(tx.getDateTime().format(formatter));
+        }
+    });
 
     model.addAttribute("totalUsers", totalUsers);
+    model.addAttribute("totalAccounts", totalAccounts);
+    model.addAttribute("totalBalance", totalBalance);
     model.addAttribute("totalTransactions", totalTransactions);
-    model.addAttribute("totalAdmins", totalAdmins);
+    model.addAttribute("recentTransactions", recentTransactions);
 
     return "admin/dashboard";
 }
-
     // ===============================
     // 👥 View Users (with pagination & search)
     // ===============================
