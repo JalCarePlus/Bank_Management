@@ -47,29 +47,34 @@
             </div>
         </div>
 
-        <!-- Summary Stats -->
-        <div class="row mt-4">
-            <div class="col-md-4">
-                <div class="card bg-primary text-white">
-                    <div class="card-body">
-                        <h6>Total Transactions</h6>
-                        <h4 th:text="${totalTransactions != null ? totalTransactions : 0}">0</h4>
+        <!-- Calculate totals from transactions -->
+        <div th:with="creditTotal=${#aggregates.sum(transactions.![#this.type == 'CREDIT' ? amount : 0])},
+                     debitTotal=${#aggregates.sum(transactions.![#this.type == 'DEBIT' ? amount : 0])}">
+            
+            <!-- Summary Stats -->
+            <div class="row mt-4">
+                <div class="col-md-4">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body">
+                            <h6>Total Transactions</h6>
+                            <h4 th:text="${#lists.size(transactions)}">0</h4>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card bg-success text-white">
-                    <div class="card-body">
-                        <h6>Total Credits</h6>
-                        <h4>₹<span th:text="${#numbers.formatDecimal(totalCredits != null ? totalCredits : 0, 0, 2)}">0.00</span></h4>
+                <div class="col-md-4">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <h6>Total Credits</h6>
+                            <h4>₹<span th:text="${#numbers.formatDecimal(creditTotal, 0, 2)}">0.00</span></h4>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card bg-danger text-white">
-                    <div class="card-body">
-                        <h6>Total Debits</h6>
-                        <h4>₹<span th:text="${#numbers.formatDecimal(totalDebits != null ? totalDebits : 0, 0, 2)}">0.00</span></h4>
+                <div class="col-md-4">
+                    <div class="card bg-danger text-white">
+                        <div class="card-body">
+                            <h6>Total Debits</h6>
+                            <h4>₹<span th:text="${#numbers.formatDecimal(debitTotal, 0, 2)}">0.00</span></h4>
+                        </div>
                     </div>
                 </div>
             </div>
