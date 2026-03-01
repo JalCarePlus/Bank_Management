@@ -33,7 +33,7 @@ public class AdminController {
     private UserRepository userRepository;
 
     @Autowired
-    private AccountRepository accountRepository;
+    private AccountRepository accountRepository;  // This was missing
 
     @Autowired
     private TransactionRepository transactionRepository;
