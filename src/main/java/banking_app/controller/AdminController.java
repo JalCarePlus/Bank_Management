@@ -1,8 +1,10 @@
 package banking_app.controller;
 
 import banking_app.entity.User;
+import banking_app.entity.Account;
 import banking_app.entity.Transaction;
 import banking_app.repository.UserRepository;
+import banking_app.repository.AccountRepository;
 import banking_app.repository.TransactionRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,9 +16,14 @@ import jakarta.servlet.http.HttpSession;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
 
 @Controller
 @RequestMapping("/admin")
@@ -26,9 +33,12 @@ public class AdminController {
     private UserRepository userRepository;
 
     @Autowired
+    private AccountRepository accountRepository;
+
+    @Autowired
     private TransactionRepository transactionRepository;
 
-    // 🔐 Check admin session - Fixed to check User object from session
+    // 🔐 Check admin session
     private boolean isAdmin(HttpSession session) {
         User loggedInUser = (User) session.getAttribute("loggedInUser");
         return loggedInUser != null && "ADMIN".equals(loggedInUser.getRole());
@@ -37,43 +47,56 @@ public class AdminController {
     // ===============================
     // 📊 Admin Dashboard
     // ===============================
-  @GetMapping("/dashboard")
-public String adminDashboard(Model model, HttpSession session) {
-    if (!isAdmin(session)) {
-        return "redirect:/login";
+    @GetMapping("/dashboard")
+    public String adminDashboard(Model model, HttpSession session) {
+        if (!isAdmin(session)) {
+            return "redirect:/login";
+        }
+
+        long totalUsers = userRepository.count();
+        long totalAccounts = accountRepository.count();
+        long totalTransactions = transactionRepository.count();
+        
+        // Calculate total balance
+        double totalBalance = 0.0;
+        try {
+            List<Account> allAccounts = accountRepository.findAll();
+            for (Account acc : allAccounts) {
+                if (acc.getBalance() != null) {
+                    totalBalance += acc.getBalance();
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Error calculating balance: " + e.getMessage());
+        }
+
+        // Get recent transactions
+        List<Transaction> recentTransactions = new ArrayList<>();
+        try {
+            recentTransactions = transactionRepository.findTop10ByOrderByDateTimeDesc();
+        } catch (Exception e) {
+            System.out.println("Error fetching transactions: " + e.getMessage());
+        }
+        
+        // Format dates
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+        for (Transaction tx : recentTransactions) {
+            if (tx.getDateTime() != null) {
+                tx.setFormattedDateTime(tx.getDateTime().format(formatter));
+            }
+        }
+
+        model.addAttribute("totalUsers", totalUsers);
+        model.addAttribute("totalAccounts", totalAccounts);
+        model.addAttribute("totalBalance", totalBalance);
+        model.addAttribute("totalTransactions", totalTransactions);
+        model.addAttribute("recentTransactions", recentTransactions);
+
+        return "admin/dashboard";
     }
 
-    long totalUsers = userRepository.count();
-    long totalAccounts = accountRepository.count();
-    long totalTransactions = transactionRepository.count();
-    
-    // Calculate total balance
-    List<Account> allAccounts = accountRepository.findAll();
-    double totalBalance = allAccounts.stream()
-        .mapToDouble(Account::getBalance)
-        .sum();
-    
-    // Get recent transactions (last 10)
-    List<Transaction> recentTransactions = transactionRepository.findTop10ByOrderByDateTimeDesc();
-    
-    // Format dates
-    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
-    recentTransactions.forEach(tx -> {
-        if (tx.getDateTime() != null) {
-            tx.setFormattedDateTime(tx.getDateTime().format(formatter));
-        }
-    });
-
-    model.addAttribute("totalUsers", totalUsers);
-    model.addAttribute("totalAccounts", totalAccounts);
-    model.addAttribute("totalBalance", totalBalance);
-    model.addAttribute("totalTransactions", totalTransactions);
-    model.addAttribute("recentTransactions", recentTransactions);
-
-    return "admin/dashboard";
-}
     // ===============================
-    // 👥 View Users (with pagination & search)
+    // 👥 View Users
     // ===============================
     @GetMapping("/users")
     public String viewUsers(
@@ -86,17 +109,36 @@ public String adminDashboard(Model model, HttpSession session) {
             return "redirect:/login";
         }
 
+        Pageable pageable = PageRequest.of(page, 10);
         Page<User> userPage;
 
-        if (keyword != null && !keyword.isEmpty()) {
-            userPage = userRepository
-                    .findByUsernameContainingOrEmailContainingOrNameContaining(
-                            keyword, keyword, keyword, PageRequest.of(page, 10));
-        } else {
-            userPage = userRepository.findAll(PageRequest.of(page, 10));
+        try {
+            if (keyword != null && !keyword.isEmpty()) {
+                userPage = userRepository
+                        .findByUsernameContainingOrEmailContainingOrNameContaining(
+                                keyword, keyword, keyword, pageable);
+            } else {
+                userPage = userRepository.findAll(pageable);
+            }
+        } catch (Exception e) {
+            userPage = Page.empty();
+        }
+
+        // Get accounts for each user
+        Map<Long, Account> userAccounts = new HashMap<>();
+        for (User user : userPage.getContent()) {
+            try {
+                Account account = accountRepository.findByUser(user);
+                if (account != null) {
+                    userAccounts.put(user.getId(), account);
+                }
+            } catch (Exception e) {
+                System.out.println("Error fetching account for user: " + user.getId());
+            }
         }
 
         model.addAttribute("users", userPage.getContent());
+        model.addAttribute("userAccounts", userAccounts);
         model.addAttribute("currentPage", page);
         model.addAttribute("totalPages", userPage.getTotalPages());
         model.addAttribute("keyword", keyword);
@@ -105,25 +147,47 @@ public String adminDashboard(Model model, HttpSession session) {
     }
 
     // ===============================
-    // 🔄 Toggle User Active/Inactive
+    // 👤 View Single User
     // ===============================
-    @GetMapping("/toggle-user/{id}")
-    public String toggleUser(@PathVariable Long id, HttpSession session) {
+    @GetMapping("/user/{id}")
+    public String viewUser(@PathVariable Long id, Model model, HttpSession session) {
         if (!isAdmin(session)) {
             return "redirect:/login";
         }
 
         User user = userRepository.findById(id).orElse(null);
-
-        if (user != null) {
-            // Since active is @Transient, we need to handle this differently
-            // Option 1: You might want to add an 'active' column to database
-            // Option 2: For now, just redirect back without changing
-            // user.setActive(!user.isActive());
-            // userRepository.save(user);
+        if (user == null) {
+            return "redirect:/admin/users";
         }
 
-        return "redirect:/admin/users";
+        Account account = null;
+        List<Transaction> transactions = new ArrayList<>();
+        
+        try {
+            account = accountRepository.findByUser(user);
+        } catch (Exception e) {
+            System.out.println("Error fetching account: " + e.getMessage());
+        }
+        
+        try {
+            transactions = transactionRepository.findByUser(user);
+        } catch (Exception e) {
+            System.out.println("Error fetching transactions: " + e.getMessage());
+        }
+        
+        // Format dates
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+        for (Transaction tx : transactions) {
+            if (tx.getDateTime() != null) {
+                tx.setFormattedDateTime(tx.getDateTime().format(formatter));
+            }
+        }
+
+        model.addAttribute("user", user);
+        model.addAttribute("account", account);
+        model.addAttribute("transactions", transactions);
+
+        return "admin/user-details";
     }
 
     // ===============================
@@ -135,14 +199,44 @@ public String adminDashboard(Model model, HttpSession session) {
             return "redirect:/login";
         }
 
-        List<Transaction> transactions = transactionRepository.findAll();
+        List<Transaction> transactions = new ArrayList<>();
+        try {
+            transactions = transactionRepository.findAll();
+        } catch (Exception e) {
+            System.out.println("Error fetching transactions: " + e.getMessage());
+        }
+        
+        // Format dates
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+        for (Transaction tx : transactions) {
+            if (tx.getDateTime() != null) {
+                tx.setFormattedDateTime(tx.getDateTime().format(formatter));
+            }
+        }
+        
+        // Calculate totals
+        double totalCredits = 0.0;
+        double totalDebits = 0.0;
+        
+        for (Transaction tx : transactions) {
+            if (tx.getAmount() != null) {
+                if ("CREDIT".equals(tx.getType())) {
+                    totalCredits += tx.getAmount();
+                } else if ("DEBIT".equals(tx.getType())) {
+                    totalDebits += tx.getAmount();
+                }
+            }
+        }
+
         model.addAttribute("transactions", transactions);
+        model.addAttribute("totalCredits", totalCredits);
+        model.addAttribute("totalDebits", totalDebits);
 
         return "admin/transactions";
     }
 
     // ===============================
-    // 📈 Statistics (Transactions Only)
+    // 📈 Statistics
     // ===============================
     @GetMapping("/statistics")
     public String showStatistics(Model model, HttpSession session) {
@@ -152,17 +246,23 @@ public String adminDashboard(Model model, HttpSession session) {
 
         LocalDateTime weekAgo = LocalDateTime.now().minusDays(7);
 
-        List<Object[]> dailyTransactions =
-                transactionRepository.getDailyTransactionCount(weekAgo);
+        List<Object[]> dailyTransactions = new ArrayList<>();
+        List<Object[]> transactionVolume = new ArrayList<>();
+        
+        try {
+            dailyTransactions = transactionRepository.getDailyTransactionCount(weekAgo);
+        } catch (Exception e) {
+            System.out.println("Error fetching daily transactions: " + e.getMessage());
+        }
+        
+        try {
+            transactionVolume = transactionRepository.getDailyTransactionVolume(weekAgo);
+        } catch (Exception e) {
+            System.out.println("Error fetching transaction volume: " + e.getMessage());
+        }
 
-        List<Object[]> transactionVolume =
-                transactionRepository.getDailyTransactionVolume(weekAgo);
-
-        model.addAttribute("dailyTransactions",
-                dailyTransactions != null ? dailyTransactions : List.of());
-
-        model.addAttribute("transactionVolume",
-                transactionVolume != null ? transactionVolume : List.of());
+        model.addAttribute("dailyTransactions", dailyTransactions);
+        model.addAttribute("transactionVolume", transactionVolume);
 
         return "admin/statistics";
     }
@@ -181,20 +281,23 @@ public String adminDashboard(Model model, HttpSession session) {
             return "redirect:/login";
         }
 
-        if (userRepository.findByUsername(username) != null) {
+        User existingUser = userRepository.findByUsername(username);
+        if (existingUser != null) {
             return "redirect:/admin/users?error=exists";
         }
 
         User user = new User();
         user.setUsername(username);
         user.setEmail(email);
-        user.setPassword(password); // 🔒 In production use BCrypt
+        user.setPassword(password);
         user.setRole("ADMIN");
-        // active is @Transient, so it won't be saved
-        // user.setActive(true);
+        user.setName("Administrator");
 
-        userRepository.save(user);
-
-        return "redirect:/admin/users?success=created";
+        try {
+            userRepository.save(user);
+            return "redirect:/admin/users?success=created";
+        } catch (Exception e) {
+            return "redirect:/admin/users?error=failed";
+        }
     }
 }
