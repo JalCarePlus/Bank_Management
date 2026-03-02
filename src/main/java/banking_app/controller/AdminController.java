@@ -270,6 +270,13 @@ public class AdminController {
     // ===============================
     // ➕ Create Admin
     // ===============================
+    @GetMapping("/create-admin")
+public String showCreateAdminForm(HttpSession session) {
+    if (!isAdmin(session)) {
+        return "redirect:/login";
+    }
+    return "admin/create-admin"; // This renders create-admin.html
+}
     @PostMapping("/create-admin")
     public String createAdmin(
             @RequestParam String username,
